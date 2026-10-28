@@ -12,7 +12,7 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 .
 ├── Dockerfile            # Debian 12 + Java 17 runtime only
 ├── docker-compose.yml    # ports + bind mounts
-├── spark-3.5.2-bin-hadoop3-scala2.13.tgz(.sha512)  # Spark distribution, committed for quick start
+├── spark-3.5.2-bin-hadoop3-scala2.13.tgz.sha512    # checksum for the Spark tarball (tarball itself is git-ignored)
 ├── dist/spark/           # ...extracted here (git-ignored, not in the image)
 ├── conf/                 # mounted as $SPARK_HOME/conf
 │   └── spark-defaults.conf
@@ -32,19 +32,18 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 ## Requirements
 
 - Docker. The image is `linux/amd64`.
-- [Git LFS](https://git-lfs.com) (`brew install git-lfs && git lfs install`) before cloning. The Spark tarball (`*.tgz`) is stored in LFS. If you cloned without it, run `git lfs pull`.
 - Spark **Distribution built for Scala 2.13** (`spark-3.5.2-bin-hadoop3-scala2.13`). This must match the Gluten jar's `spark3.5.2_2.13` build.
 - A Gluten bundle built for **Debian 12 / x86_64 / Java 17**. Its native libs need glibc ≥ 2.36, which is why the base image is Debian 12 and not Ubuntu 22.04 (glibc 2.35).
 
 ## First-time setup
 
-1. Extract the bundled Spark tarball into `./dist/spark`:
+1. Download the official Apache Spark release, verify it and extract it into `./dist/spark`.
+   The tarball is git-ignored; only its checksum is committed:
    ```bash
+   curl -fLO https://archive.apache.org/dist/spark/spark-3.5.2/spark-3.5.2-bin-hadoop3-scala2.13.tgz
    shasum -a 512 -c spark-3.5.2-bin-hadoop3-scala2.13.tgz.sha512
    mkdir -p dist/spark && tar -xzf spark-3.5.2-bin-hadoop3-scala2.13.tgz -C dist/spark --strip-components=1
    ```
-   The tarball is the official Apache release, so you can also re-download it from
-   `https://archive.apache.org/dist/spark/spark-3.5.2/spark-3.5.2-bin-hadoop3-scala2.13.tgz`.
    If you already have the distribution elsewhere, skip this step and set `SPARK_DIST` (see below).
 2. Put the Gluten bundle jar in `./jars/`. It is git-ignored (`jars/gluten-*.jar`). The GCS connector jar is committed.
 3. Put event logs in `./event-logs/`. Plain and compressed (`.zstd`, `.lz4`, …) logs both work.
