@@ -32,6 +32,7 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 ## Requirements
 
 - Docker. The image is `linux/amd64`.
+- [Git LFS](https://git-lfs.com) (`brew install git-lfs && git lfs install`) before cloning. The Spark tarball (`*.tgz`) is stored in LFS. If you cloned without it, run `git lfs pull`.
 - Spark **Distribution built for Scala 2.13** (`spark-3.5.2-bin-hadoop3-scala2.13`). This must match the Gluten jar's `spark3.5.2_2.13` build.
 - A Gluten bundle built for **Debian 12 / x86_64 / Java 17**. Its native libs need glibc ≥ 2.36, which is why the base image is Debian 12 and not Ubuntu 22.04 (glibc 2.35).
 
