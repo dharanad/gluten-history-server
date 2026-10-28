@@ -7,8 +7,9 @@ dist/*
 event-logs/*
 !event-logs/.gitkeep
 
-# Spark tarball: downloaded from archive.apache.org (see README); only its .sha512 is committed
+# Spark tarball and its checksum: downloaded from archive.apache.org (see README)
 spark-*.tgz
+spark-*.tgz.sha512
 
 # Gluten bundle: built and updated outside this repo; drop it into jars/
 jars/gluten-*.jar

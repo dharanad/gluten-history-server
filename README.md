@@ -12,8 +12,7 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 .
 ├── Dockerfile            # Debian 12 + Java 17 runtime only
 ├── docker-compose.yml    # ports + bind mounts
-├── spark-3.5.2-bin-hadoop3-scala2.13.tgz.sha512    # checksum for the Spark tarball (tarball itself is git-ignored)
-├── dist/spark/           # ...extracted here (git-ignored, not in the image)
+├── dist/spark/           # Spark distribution, extracted here (git-ignored, not in the image)
 ├── conf/                 # mounted as $SPARK_HOME/conf
 │   └── spark-defaults.conf
 ├── jars/                 # Gluten bundle + GCS connector jars, added to the History Server classpath
@@ -37,10 +36,11 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 
 ## First-time setup
 
-1. Download the official Apache Spark release, verify it and extract it into `./dist/spark`.
-   The tarball is git-ignored; only its checksum is committed:
+1. Download the official Apache Spark release and its checksum, verify it and extract it into `./dist/spark`.
+   Both files are git-ignored:
    ```bash
    curl -fLO https://archive.apache.org/dist/spark/spark-3.5.2/spark-3.5.2-bin-hadoop3-scala2.13.tgz
+   curl -fLO https://archive.apache.org/dist/spark/spark-3.5.2/spark-3.5.2-bin-hadoop3-scala2.13.tgz.sha512
    shasum -a 512 -c spark-3.5.2-bin-hadoop3-scala2.13.tgz.sha512
    mkdir -p dist/spark && tar -xzf spark-3.5.2-bin-hadoop3-scala2.13.tgz -C dist/spark --strip-components=1
    ```
