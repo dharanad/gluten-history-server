@@ -4,25 +4,32 @@ Spark History Server with Gluten (Velox) support.
 
 Runs the Spark History Server in Docker to view Spark event logs. The Gluten Velox bundle jar is on its classpath, so each application also gets a **Gluten** tab in the UI.
 
-The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The Spark distribution, Gluten jar, config and event logs are bind-mounted from this directory. You can swap any of them with a restart and never need to rebuild the image.
+The image contains Debian 12 (x86_64), Java 17, `tini` and the Spark distribution. At build time it copies Spark from `./dist/spark`, so the build itself downloads nothing. The jars, config and event logs are bind-mounted, so changing them needs only a restart.
 
 ## Layout
 
 ```
 .
-├── Dockerfile            # Debian 12 + Java 17 runtime only
+├── Dockerfile            # Debian 12 + Java 17, copies in dist/spark
 ├── docker-compose.yml    # ports + bind mounts
 ├── setup.sh              # installs Spark into dist/spark, checks for the Gluten jar
-├── dist/spark/           # Spark distribution, installed by setup.sh (git-ignored, not in the image)
+├── dist/spark/           # Spark distribution, installed by setup.sh (git-ignored, copied into the image)
 ├── conf/                 # mounted as $SPARK_HOME/conf
 │   └── spark-defaults.conf
 ├── jars/                 # Gluten bundle + GCS connector jars, added to the History Server classpath
 └── event-logs/           # local Spark event logs to browse
 ```
 
+Baked into the image at build time:
+
+| Host path | Image path | Notes |
+|---|---|---|
+| `./dist/spark` | `/opt/spark` | |
+
+Mounted at run time:
+
 | Host path | Container path | Notes |
 |---|---|---|
-| `./dist/spark` (or `$SPARK_DIST`) | `/opt/spark` | read-only |
 | `./conf` | `/opt/spark/conf` | read-only; replaces the distribution's own `conf/` |
 | `./jars` | `/opt/extra-jars` | read-only; on the classpath via `SPARK_DAEMON_CLASSPATH=/opt/extra-jars/*` |
 | `./event-logs` | `/opt/event-logs` | default `spark.history.fs.logDirectory` (see `EVENT_LOG_DIR`) |
@@ -45,13 +52,19 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
    ./setup.sh --spark /path/to/spark.tgz       # or extract a tarball you already have
    ```
    It is safe to re-run: an existing `dist/spark` is kept unless you pass `--spark` or `--force`.
-   Alternatively, skip `dist/spark` entirely and point `SPARK_DIST` at a distribution elsewhere (see below).
 3. Put event logs in `./event-logs/`. Plain and compressed (`.zstd`, `.lz4`, …) logs both work.
 4. Build and start:
    ```bash
    docker compose up -d --build
    ```
 5. Open http://localhost:18080.
+
+## Sharing the image through a registry
+
+Set `IMAGE` in `.env` or the shell. It defaults to the Docker Hub repo `IMAGE=dharanaditya/gluten-history-server:latest`. Log in to the registry with `docker login` (for Docker Hub, use an account with push access to the repo).
+
+- **Publish** (needs `dist/spark`): `./setup.sh --publish` prepares Spark and checks the Gluten jar as usual, then runs `docker compose build` and `docker compose push`. The image doesn't include the jars.
+- **Pull** (needs `conf/`, `jars/`, `.env` and `docker-compose.yml`; no Spark): `./setup.sh --pull` checks the Gluten jar, runs `docker compose pull`, then `docker compose up -d --no-build`, which recreates the container if the image changed. Re-run it to pick up a newer published image.
 
 ## Day-to-day
 
@@ -60,13 +73,13 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 | Add or remove event logs | Drop files into `./event-logs/`. They are picked up within `spark.history.fs.update.interval` (10s). No restart. |
 | Change History Server config | Edit `conf/spark-defaults.conf`, then `docker compose restart` |
 | Update the Gluten jar | Replace the jar in `./jars/` (keep only one Gluten jar there), then `docker compose restart` |
-| Use a different Spark distribution | Replace `./dist/spark`, then `docker compose restart`. To point elsewhere: `SPARK_DIST=/path/to/spark docker compose up -d` |
+| Use a different Spark distribution | `./setup.sh --spark /path/to/spark-dir-or-tgz`, then `docker compose up -d --build` |
 | See logs | `docker compose logs -f` |
 | Read event logs from GCS | `EVENT_LOG_DIR=gs://bucket/path docker compose up -d` (see [Reading event logs from GCS](#reading-event-logs-from-gcs)) |
 | Give the server more heap for big logs | `export SPARK_DAEMON_MEMORY=8g` then `docker compose up -d` |
 | Stop | `docker compose down` (add `-v` to also wipe the parsed-app cache) |
 
-Rebuild (`docker compose up -d --build`) only when the `Dockerfile` itself changes.
+Rebuild (`docker compose up -d --build`) when the `Dockerfile` or `./dist/spark` change.
 
 ### Settings
 
@@ -75,8 +88,8 @@ Compose variables go in your shell or in a `.env` file next to `docker-compose.y
 | Variable | Default | Purpose |
 |---|---|---|
 | `EVENT_LOG_DIR` | `file:///opt/event-logs` (the mounted `./event-logs`) | `spark.history.fs.logDirectory`; can be `gs://bucket/path` |
-| `SPARK_DIST` | `./dist/spark` | Spark distribution to mount |
 | `GCLOUD_CONFIG_DIR` | `~/.config/gcloud` | gcloud config dir with `application_default_credentials.json` |
+| `IMAGE` | `gluten-history-server` | image name to build, push and pull; a registry path for `--publish` / `--pull` |
 | `SPARK_DAEMON_MEMORY` | `4g` | History Server JVM heap (`-Xmx`); raise to 8g+ for very large logs |
 
 Everything else lives in `conf/spark-defaults.conf`: update interval, UI port, GCS settings and the store settings below.
@@ -124,7 +137,7 @@ The History Server reads one log directory at a time. Unset `EVENT_LOG_DIR` to g
 - **No Gluten tab.** Check that the jar is in `./jars/` and that it is on the classpath:
   `docker exec gluten-history-server bash -c 'tr "\0" " " < /proc/$(pgrep -o java)/cmdline'`
   The output should contain `/opt/extra-jars/*`.
-- **`Is a directory` / `start-history-server.sh: not found`.** `./dist/spark` is empty or wrongly nested. `./dist/spark/sbin/start-history-server.sh` must exist. Re-run `./setup.sh --force` (or `--spark <path>`).
+- **Build fails with `dist/spark is not a Spark distribution` or `"/dist/spark": not found`.** `./dist/spark` is missing, empty or wrongly nested. `./dist/spark/sbin/start-history-server.sh` must exist. Re-run `./setup.sh --force` (or `--spark <path>`).
 - **GCS: `401`/`403` or `No FileSystem for scheme "gs"`.** Check `gcloud auth application-default print-access-token` on the host, check bucket permissions, and check that `jars/gcs-connector-*-shaded.jar` exists.
 - **App missing from the list.** Look at `docker compose logs` for parse errors, and check that the file is readable and finished. An in-progress log ends in `.inprogress`.
 - **Running Gluten queries (not just viewing logs) in this container** needs more than this setup provides. It needs the JVM `--add-opens` / `-Dio.netty.tryReflectionSetAccessible=true` options and any classes the bundle depends on, e.g. the spark-bigquery connector's repackaged Guava.

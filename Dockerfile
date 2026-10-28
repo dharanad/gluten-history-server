@@ -11,7 +11,12 @@ ENV PATH="${SPARK_HOME}/bin:${SPARK_HOME}/sbin:${JAVA_HOME}/bin:${PATH}"
 RUN apt-get update \
  && apt-get install -y --no-install-recommends openjdk-17-jre-headless procps tini \
  && rm -rf /var/lib/apt/lists/* \
- && mkdir -p /opt/spark /opt/extra-jars /opt/event-logs
+ && mkdir -p /opt/extra-jars /opt/event-logs
+
+# Spark distribution installed by setup.sh. The jars (/opt/extra-jars) are mounted at run time.
+COPY dist/spark ${SPARK_HOME}
+RUN test -f ${SPARK_HOME}/sbin/start-history-server.sh \
+ || { echo "error: dist/spark is not a Spark distribution; run ./setup.sh" >&2; exit 1; }
 
 WORKDIR ${SPARK_HOME}
 EXPOSE 18080

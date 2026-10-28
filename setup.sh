@@ -1,12 +1,16 @@
 #!/usr/bin/env bash
-# Prepares dist/spark and jars/ for docker compose. Safe to re-run.
+# Prepares dist/spark (copied into the image) and jars/ (mounted at run time). Safe to re-run.
 #
 #   ./setup.sh                               download Spark (if dist/spark is missing)
 #   ./setup.sh --spark /path/to/spark-dir    copy an existing Spark distribution into dist/spark
 #   ./setup.sh --spark /path/to/spark.tgz    extract an existing Spark tarball into dist/spark
 #   ./setup.sh --force                       re-download Spark even if dist/spark is already set up
+#   ./setup.sh --publish                     also build the image and push it to $IMAGE
+#   ./setup.sh --pull                        check jars/, pull $IMAGE and (re)start docker compose with it
 #
 # The Gluten bundle is not fetched: copy it into jars/ yourself. The script checks it is there.
+# IMAGE (e.g. dharanaditya/gluten-history-server:latest on Docker Hub) is read from the shell
+# or .env. Log in to the registry first (docker login).
 set -euo pipefail
 
 SPARK_VERSION=3.5.2
@@ -20,22 +24,62 @@ JARS="$ROOT/jars"
 
 spark_src=""
 force=false
+mode=setup
 tmp=""
 
 cleanup() { rm -rf "$STAGE" ${tmp:+"$tmp"}; }
 trap cleanup EXIT
 
-usage() { sed -n '2,9p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
+usage() { sed -n '2,13p' "$0" | sed 's/^# \{0,1\}//'; exit "${1:-0}"; }
 die() { echo "error: $*" >&2; exit 1; }
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
     --spark)  [[ $# -ge 2 ]] || die "--spark needs a path"; spark_src="$2"; shift 2 ;;
     --force)  force=true; shift ;;
+    --publish) mode=publish; shift ;;
+    --pull)    mode=pull; shift ;;
     -h|--help) usage ;;
     *) echo "error: unknown argument: $1" >&2; usage 1 ;;
   esac
 done
+
+compose() { docker compose --project-directory "$ROOT" "$@"; }
+
+# The image name compose resolves from IMAGE (shell or .env); publishing and pulling need a registry path.
+require_image() {
+  local image
+  image="$(compose config --images)"
+  [[ "$image" == */* ]] || die "set IMAGE to a registry path (in .env or the shell); docker compose resolves it to '$image'"
+  echo "$image"
+}
+
+check_gluten_jar() {
+  local existing
+  shopt -s nullglob
+  existing=("$JARS"/gluten-*.jar)
+  shopt -u nullglob
+
+  if [[ ${#existing[@]} -eq 0 ]]; then
+    die "no Gluten jar in jars/. Copy your Gluten bundle (gluten-velox-bundle-spark${SPARK_VERSION}_2.13-*.jar) into jars/ and re-run"
+  elif [[ ${#existing[@]} -gt 1 ]]; then
+    die "more than one Gluten jar in jars/; keep only one: ${existing[*]##*/}"
+  fi
+  echo "Gluten jar found: jars/${existing[0]##*/}"
+
+  [[ "${existing[0]##*/}" == *"spark${SPARK_VERSION}_2.13"* ]] \
+    || echo "warning: ${existing[0]##*/} doesn't look like a spark${SPARK_VERSION}_2.13 build" >&2
+}
+
+if [[ "$mode" == pull ]]; then
+  image="$(require_image)"
+  check_gluten_jar
+  echo "Pulling $image"
+  compose pull
+  compose up -d --no-build
+  echo "Running $image on http://localhost:18080"
+  exit 0
+fi
 
 is_spark_dist() { [[ -f "$1/sbin/start-history-server.sh" ]]; }
 
@@ -79,19 +123,17 @@ else
   echo "Spark already in dist/spark (use --spark or --force to replace it)"
 fi
 
-shopt -s nullglob
-existing=("$JARS"/gluten-*.jar)
-shopt -u nullglob
+check_gluten_jar
 
-if [[ ${#existing[@]} -eq 0 ]]; then
-  die "no Gluten jar in jars/. Copy your Gluten bundle (gluten-velox-bundle-spark${SPARK_VERSION}_2.13-*.jar) into jars/ and re-run"
-elif [[ ${#existing[@]} -gt 1 ]]; then
-  die "more than one Gluten jar in jars/; keep only one: ${existing[*]##*/}"
+if [[ "$mode" == publish ]]; then
+  image="$(require_image)"
+  echo "Building and pushing $image"
+  compose build
+  compose push
+  echo
+  echo "Published $image. Elsewhere, run: ./setup.sh --pull"
+  exit 0
 fi
-echo "Gluten jar found: jars/${existing[0]##*/}"
-
-[[ "${existing[0]##*/}" == *"spark${SPARK_VERSION}_2.13"* ]] \
-  || echo "warning: ${existing[0]##*/} doesn't look like a spark${SPARK_VERSION}_2.13 build" >&2
 
 echo
 echo "Done. Start with: docker compose up -d --build"
