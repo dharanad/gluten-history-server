@@ -1,4 +1,4 @@
-# dpas-history-server
+# gluten-history-server
 
 Spark History Server with Gluten (Velox) support.
 
@@ -122,7 +122,7 @@ The History Server reads one log directory at a time. Unset `EVENT_LOG_DIR` to g
 ## Troubleshooting
 
 - **No Gluten tab.** Check that the jar is in `./jars/` and that it is on the classpath:
-  `docker exec dpas-history-server bash -c 'tr "\0" " " < /proc/$(pgrep -o java)/cmdline'`
+  `docker exec gluten-history-server bash -c 'tr "\0" " " < /proc/$(pgrep -o java)/cmdline'`
   The output should contain `/opt/extra-jars/*`.
 - **`Is a directory` / `start-history-server.sh: not found`.** `./dist/spark` is empty or wrongly nested. `./dist/spark/sbin/start-history-server.sh` must exist (use `--strip-components=1` when extracting).
 - **GCS: `401`/`403` or `No FileSystem for scheme "gs"`.** Check `gcloud auth application-default print-access-token` on the host, check bucket permissions, and check that `jars/gcs-connector-*-shaded.jar` exists.

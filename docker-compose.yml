@@ -4,14 +4,14 @@
 #   SPARK_DAEMON_MEMORY=8g           History Server heap (default 4g)
 #   SPARK_DIST=/path/to/spark        use a Spark distribution outside ./dist/spark
 #   GCLOUD_CONFIG_DIR=/path          gcloud config dir holding application_default_credentials.json
-name: dpas-history-server
+name: gluten-history-server
 
 services:
-  dpas-history-server:
+  gluten-history-server:
     build: .
-    image: dpas-history-server
+    image: gluten-history-server
     platform: linux/amd64
-    container_name: dpas-history-server
+    container_name: gluten-history-server
     ports:
       - "18080:18080"
     environment:
