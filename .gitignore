@@ -1,8 +1,11 @@
+# Keep the directories (via .gitkeep), ignore their contents.
 # Extracted Spark distribution(s): recreate from the committed tarball (see README)
-dist/
+dist/*
+!dist/.gitkeep
 
 # Event logs to browse (local only)
-event-logs/
+event-logs/*
+!event-logs/.gitkeep
 
 # Gluten bundle: built and updated outside this repo; drop it into jars/
 jars/gluten-*.jar
