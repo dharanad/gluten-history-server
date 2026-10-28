@@ -1,0 +1,30 @@
+# After changing the Spark distribution, jars or conf: `docker compose restart` (no rebuild needed).
+# Overrides (shell env or a .env file next to this file):
+#   EVENT_LOG_DIR=gs://bucket/path   read event logs from GCS instead of ./event-logs
+#   SPARK_DAEMON_MEMORY=8g           History Server heap (default 4g)
+#   SPARK_DIST=/path/to/spark        use a Spark distribution outside ./dist/spark
+#   GCLOUD_CONFIG_DIR=/path          gcloud config dir holding application_default_credentials.json
+name: dpas-history-server
+
+services:
+  dpas-history-server:
+    build: .
+    image: dpas-history-server
+    platform: linux/amd64
+    container_name: dpas-history-server
+    ports:
+      - "18080:18080"
+    environment:
+      SPARK_HISTORY_OPTS: "-Dspark.history.fs.logDirectory=${EVENT_LOG_DIR:-file:///opt/event-logs}"
+      SPARK_DAEMON_MEMORY: ${SPARK_DAEMON_MEMORY:-4g}
+    volumes:
+      - ${SPARK_DIST:-./dist/spark}:/opt/spark:ro
+      - ./conf:/opt/spark/conf:ro
+      - ./jars:/opt/extra-jars:ro
+      - ./event-logs:/opt/event-logs
+      - ${GCLOUD_CONFIG_DIR:-~/.config/gcloud}:/root/.config/gcloud:ro
+      # spark.history.store.path: parsed-app cache (RocksDB); survives restarts. Wipe with `docker compose down -v`.
+      - history-store:/opt/history-store
+
+volumes:
+  history-store:

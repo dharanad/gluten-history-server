@@ -1,0 +1,10 @@
+# Extracted Spark distribution(s): recreate from the committed tarball (see README)
+dist/
+
+# Event logs to browse (local only)
+event-logs/
+
+# Gluten bundle: built and updated outside this repo; drop it into jars/
+jars/gluten-*.jar
+
+.DS_Store
