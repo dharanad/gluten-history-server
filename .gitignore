@@ -1,5 +1,5 @@
 # Keep the directories (via .gitkeep), ignore their contents.
-# Extracted Spark distribution(s): download and extract the tarball (see README)
+# Spark distribution: installed by setup.sh
 dist/*
 !dist/.gitkeep
 
@@ -7,7 +7,7 @@ dist/*
 event-logs/*
 !event-logs/.gitkeep
 
-# Spark tarball and its checksum: downloaded from archive.apache.org (see README)
+# Spark tarball and checksum, if downloaded by hand
 spark-*.tgz
 spark-*.tgz.sha512
 

@@ -12,7 +12,8 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 .
 ├── Dockerfile            # Debian 12 + Java 17 runtime only
 ├── docker-compose.yml    # ports + bind mounts
-├── dist/spark/           # Spark distribution, extracted here (git-ignored, not in the image)
+├── setup.sh              # installs Spark into dist/spark, checks for the Gluten jar
+├── dist/spark/           # Spark distribution, installed by setup.sh (git-ignored, not in the image)
 ├── conf/                 # mounted as $SPARK_HOME/conf
 │   └── spark-defaults.conf
 ├── jars/                 # Gluten bundle + GCS connector jars, added to the History Server classpath
@@ -36,16 +37,15 @@ The image only provides the runtime: Debian 12 (x86_64), Java 17 and `tini`. The
 
 ## First-time setup
 
-1. Download the official Apache Spark release and its checksum, verify it and extract it into `./dist/spark`.
-   Both files are git-ignored:
+1. Put the Gluten bundle jar in `./jars/`. It is git-ignored (`jars/gluten-*.jar`) and you supply it yourself. The GCS connector jar is committed.
+2. Run the setup script. It installs Spark into `./dist/spark` and checks that the Gluten jar is present:
    ```bash
-   curl -fLO https://archive.apache.org/dist/spark/spark-3.5.2/spark-3.5.2-bin-hadoop3-scala2.13.tgz
-   curl -fLO https://archive.apache.org/dist/spark/spark-3.5.2/spark-3.5.2-bin-hadoop3-scala2.13.tgz.sha512
-   shasum -a 512 -c spark-3.5.2-bin-hadoop3-scala2.13.tgz.sha512
-   mkdir -p dist/spark && tar -xzf spark-3.5.2-bin-hadoop3-scala2.13.tgz -C dist/spark --strip-components=1
+   ./setup.sh                                  # download spark-3.5.2-bin-hadoop3-scala2.13 and verify its SHA-512
+   ./setup.sh --spark /path/to/spark-dir       # or copy a distribution you already have
+   ./setup.sh --spark /path/to/spark.tgz       # or extract a tarball you already have
    ```
-   If you already have the distribution elsewhere, skip this step and set `SPARK_DIST` (see below).
-2. Put the Gluten bundle jar in `./jars/`. It is git-ignored (`jars/gluten-*.jar`). The GCS connector jar is committed.
+   It is safe to re-run: an existing `dist/spark` is kept unless you pass `--spark` or `--force`.
+   Alternatively, skip `dist/spark` entirely and point `SPARK_DIST` at a distribution elsewhere (see below).
 3. Put event logs in `./event-logs/`. Plain and compressed (`.zstd`, `.lz4`, …) logs both work.
 4. Build and start:
    ```bash
@@ -124,7 +124,7 @@ The History Server reads one log directory at a time. Unset `EVENT_LOG_DIR` to g
 - **No Gluten tab.** Check that the jar is in `./jars/` and that it is on the classpath:
   `docker exec gluten-history-server bash -c 'tr "\0" " " < /proc/$(pgrep -o java)/cmdline'`
   The output should contain `/opt/extra-jars/*`.
-- **`Is a directory` / `start-history-server.sh: not found`.** `./dist/spark` is empty or wrongly nested. `./dist/spark/sbin/start-history-server.sh` must exist (use `--strip-components=1` when extracting).
+- **`Is a directory` / `start-history-server.sh: not found`.** `./dist/spark` is empty or wrongly nested. `./dist/spark/sbin/start-history-server.sh` must exist. Re-run `./setup.sh --force` (or `--spark <path>`).
 - **GCS: `401`/`403` or `No FileSystem for scheme "gs"`.** Check `gcloud auth application-default print-access-token` on the host, check bucket permissions, and check that `jars/gcs-connector-*-shaded.jar` exists.
 - **App missing from the list.** Look at `docker compose logs` for parse errors, and check that the file is readable and finished. An in-progress log ends in `.inprogress`.
 - **Running Gluten queries (not just viewing logs) in this container** needs more than this setup provides. It needs the JVM `--add-opens` / `-Dio.netty.tryReflectionSetAccessible=true` options and any classes the bundle depends on, e.g. the spark-bigquery connector's repackaged Guava.
